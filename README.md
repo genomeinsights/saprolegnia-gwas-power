@@ -25,6 +25,17 @@ Rscript R/pool_and_plot.R                          # summaries + figure
 
 Per-replicate results are in `out/res/`, pooled summaries in `out/summary_*.csv`.
 
+### What is and is not in the repository
+
+The repository holds the code, the per-replicate results (`out/res/*.res.rds`: clone recovery,
+SNP counts and, for every phenotype, the loci reported by each method and whether they were
+true), the pooled summaries and the figure. The intermediate simulation output (SLiM tree
+sequences `*.trees` and the genotype files `*.geno.u8`, `*.sites.tsv`, `*.inds.tsv`, ~64 MB per
+replicate) is deleted by `run_one.sh` after each replicate is analysed and is not included.
+Every step is seeded (the seed is derived from the cloning rate and replicate number in
+`run_one.sh`), so the output for any replicate can be regenerated with `./run_one.sh C REP`; to
+keep the intermediate files, comment out the final `rm -f` lines in `run_one.sh`.
+
 ## Pipeline
 
 | Step | File |
