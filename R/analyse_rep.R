@@ -2,7 +2,14 @@
 ##
 ##   Rscript R/analyse_rep.R <prefix> <seed> [out.rds]
 ##
-## <prefix>.geno.u8 / .sites.tsv / .inds.tsv come from py/ts_to_geno.py.
+## <prefix>.geno.u8 / .sites.tsv / .inds.tsv come from py/ts_to_geno.py. They are
+## intermediate files: run_one.sh writes them to out/tmp/, deletes them once this
+## script has finished, and they are not in the repository. Regenerate them for any
+## replicate with ./run_one.sh C REP (seeded), keeping them by commenting out the
+## final rm -f lines there. Only the output .rds (out/res/) is kept.
+##
+## The Simes unit test (ldscnr_simes) is computed below but not reported in the
+## figure or summaries, which use emmax_snp and ldscnr_consensus only.
 ##
 ##  1. Shallow sequencing of all isolates (depth ~ Pois(DEPTH_LOW), error ERR):
 ##     single-read IBS distances (as ANGSD -doIBS 1), corrected for each
