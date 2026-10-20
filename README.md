@@ -31,7 +31,7 @@ Per-replicate results are in `out/res/`, pooled summaries in `out/summary_*.csv`
 |---|---|
 | SLiM model: 4 x 15.75 Mb chromosomes (63 Mb), 4 sites x 1000, island migration 0.005, cloning rate C, mitotic LOH (1% of clonal births, Exp tract mean 100 kb), 4000 generations, 75 isolates sampled per site | `slim/clonal_metapop.slim` |
 | Recapitation (msprime, sexual ancestral population of 4000), neutral mutations mu = 3e-8, r = 1e-8 | `py/ts_to_geno.py` |
-| Two-stage design, phenotypes, LDscnR + EMMAX, scoring | `R/analyse_rep.R` |
+| Two-stage design, phenotypes, LDscnR and EMMAX scans, scoring | `R/analyse_rep.R` |
 | One replicate end to end | `run_one.sh C REP` |
 | Pool + figure | `R/pool_and_plot.R` -> `figures/gwas_power_clonal.{pdf,png}`, `out/summary_*.csv` |
 
@@ -57,17 +57,21 @@ Known limitation: at C = 0.999 (~30 clones) LD-decay fitting failed for one chro
 
 ## Results (out/summary_power.csv, out/summary_fdr.csv)
 
-| Cloning rate | Distinct clones (of 300) | Power, PVE 10% | Power, PVE 20% | Power, PVE 30% | FDP EMMAX SNP | FDP LDscnR consensus / Simes |
-|---|---|---|---|---|---|---|
-| 0.9   | 262 | 0.56-0.60 | 0.94 | 1.00 | 0.38 | 0.05 / 0.05 |
-| 0.95  | 229 | 0.29-0.35 | 0.94 | 1.00 | 0.34 | 0.02 / 0.02 |
-| 0.99  | 124 | 0.08-0.13 | 0.31-0.40 | 0.83-0.85 | 0.22 | 0.08 / 0.03 |
-| 0.995 | 81  | 0.00 | 0.15-0.25 | 0.42-0.54 | 0.23 | 0.01 / 0.02 |
-| 0.999 | 30  | ~0.03 | ~0.03 | 0-0.08 | 0.43 | 0 / 0 |
+Power is given as LDscnR / EMMAX single SNP; FDP is the proportion of reported loci that are false.
 
-Power is similar across the three scans. EMMAX's false discoveries are mostly isolated
-single SNPs: BH at the SNP level does not control the proportion of false *loci*, while the
-LDscnR unit-level test does.
+| Cloning rate | Distinct clones (of 300) | Power, PVE 10% | Power, PVE 20% | Power, PVE 30% | FDP LDscnR | FDP EMMAX |
+|---|---|---|---|---|---|---|
+| 0.9   | 262 | 0.56 / 0.60 | 0.94 / 0.94 | 1.00 / 1.00 | 0.05 | 0.38 |
+| 0.95  | 229 | 0.35 / 0.35 | 0.94 / 0.94 | 1.00 / 1.00 | 0.02 | 0.34 |
+| 0.99  | 124 | 0.10 / 0.13 | 0.31 / 0.40 | 0.85 / 0.85 | 0.08 | 0.22 |
+| 0.995 | 81  | 0.00 / 0.00 | 0.15 / 0.25 | 0.42 / 0.54 | 0.01 | 0.23 |
+| 0.999 | 30  | 0.03 / 0.03 | 0.03 / 0.03 | 0.00 / 0.08 | 0.00 | 0.43 |
+
+LDscnR tests one consensus genotype per LD unit (stage-1 cluster) with EMMAX, controls the FDR
+over units, and assembles significant units into loci. Its power is close to single-SNP EMMAX,
+slightly lower at intermediate numbers of clones, but far fewer of its loci are false: BH at the
+SNP level does not control the proportion of false *loci*, whereas testing LD units does.
+(`R/analyse_rep.R` also computes a Simes-combined unit test, which is not reported.)
 
 ## Licence
 
