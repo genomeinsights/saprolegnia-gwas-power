@@ -29,20 +29,27 @@ th <- theme_minimal(base_size = 9) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_line(colour = "grey90", linewidth = 0.3),
         strip.text = element_text(face = "bold", hjust = 0), legend.position = "bottom",
         plot.background = element_rect(fill = "white", colour = NA))
-xs <- scale_x_continuous("Distinct clones among 300 isolates (inferred)", breaks = round(cs$n_est),
+xs <- scale_x_continuous("Distinct clones among 300 isolates", breaks = round(cs$n_est),
                          sec.axis = dup_axis(name = "Cloning rate", labels = cs$C))
-pA <- ggplot(pw, aes(n_est, power, colour = factor(pve), group = factor(pve))) +
-  geom_line(linewidth = 0.6) + geom_point(size = 1.6) +
-  geom_errorbar(aes(ymin = pmax(power - se, 0), ymax = pmin(power + se, 1)), width = 0, linewidth = 0.3) +
-  facet_wrap(~method) +
-  scale_x_continuous("Distinct clones among 300 isolates (inferred)", breaks = round(cs$n_est)) +
+lt <- scale_linetype_manual("Method", values = c("dashed", "solid"))
+sh <- scale_shape_manual("Method", values = c(1, 16))
+pA <- ggplot(pw, aes(n_est, power, colour = factor(pve), linetype = method, shape = method,
+                     group = interaction(pve, method))) +
+  geom_line(linewidth = 0.6) + geom_point(size = 1.7) +
+  scale_x_continuous("Distinct clones among 300 isolates", breaks = round(cs$n_est),
+                     sec.axis = dup_axis(name = "Cloning rate", labels = cs$C)) +
   scale_y_continuous("Power (QTL detected)", limits = c(0, 1)) +
-  scale_colour_manual("Variance explained by QTL", values = blues,
-                      labels = function(v) paste0(as.numeric(v) * 100, "%")) + th
-pB <- ggplot(fd, aes(n_est, fdr, colour = method)) +
-  geom_line(linewidth = 0.6) + geom_point(size = 1.6) + xs +
-  scale_y_continuous("False discovery proportion", limits = c(0, NA)) +
-  scale_colour_manual(NULL, values = cats) + th
-fig <- pA / pB + plot_layout(heights = c(1.3, 1)) + plot_annotation(tag_levels = "A")
-ggsave("figures/gwas_power_clonal.pdf", fig, width = 6, height = 5.6)
-ggsave("figures/gwas_power_clonal.png", fig, width = 6, height = 5.6, dpi = 200)
+  scale_colour_manual("Variance explained", values = blues,
+                      labels = function(v) paste0(as.numeric(v) * 100, "%")) + lt + sh + th +
+  theme(legend.position = "right", legend.box = "vertical") +
+  guides(colour = guide_legend(order = 2),
+         linetype = guide_legend(order = 1, keywidth = unit(2.2, "lines"), override.aes = list(colour = "grey25")),
+         shape = guide_legend(order = 1, override.aes = list(colour = "grey25")))
+pB <- ggplot(fd, aes(n_est, fdr, linetype = method, shape = method)) +
+  geom_line(linewidth = 0.6, colour = "grey25") + geom_point(size = 1.7, colour = "grey25") + xs +
+  scale_y_continuous("False discovery proportion", limits = c(0, NA)) + lt + sh + th +
+  guides(linetype = "none", shape = "none")
+fig <- pA + pB + plot_layout(widths = c(1.15, 1), guides = "collect") +
+  plot_annotation(tag_levels = "A") & theme(legend.position = "right")
+ggsave("figures/gwas_power_clonal.pdf", fig, width = 9, height = 3.4)
+ggsave("figures/gwas_power_clonal.png", fig, width = 9, height = 3.4, dpi = 200)
