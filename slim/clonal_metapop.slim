@@ -1,0 +1,110 @@
+// clonal_metapop.slim
+//
+// Diploid, facultatively clonal metapopulation for the S. parasitica GWAS power
+// analysis. nonWF model run as discrete, non-overlapping generations.
+//
+//   * Genome: NCHR chromosomes of CHRLEN bp concatenated on one SLiM chromosome,
+//     with r = 0.5 between them (default 4 x 15.75 Mb = 63 Mb).
+//   * K demes (sites) of N individuals, linked by migration M (island model:
+//     each offspring's parent comes from a random other deme with probability M).
+//   * Each offspring is a clone with probability C, otherwise the product of
+//     meiosis between two random parents in the source deme (selfing at 1/N).
+//   * Clonal births undergo loss of heterozygosity with probability P_LOH: one
+//     gene-conversion-like tract (length ~ Exp(mean LOH_LEN), within one
+//     chromosome) is copied from the homologue, making it homozygous.
+//   * No mutations are simulated forward: the tree sequence is recorded,
+//     recapitated and mutated afterwards (py/ts_to_geno.py).
+//   * Individual tag = clonal lineage ID: new at each sexual birth, inherited
+//     through clonal births. Sampled isolates are written to OUT.samples.csv.
+//
+// Usage: slim -d C=0.99 -d SEED=1 -d "OUT='out/run1'" clonal_metapop.slim
+
+initialize() {
+	defaults = Dictionary("C", 0.99, "N", 1000, "K", 4, "M", 0.005,
+		"NCHR", 4, "CHRLEN", 15750000, "R", 1e-8,
+		"P_LOH", 0.01, "LOH_LEN", 1e5, "GENS", 4000, "NSAMP", 75, "SEED", 1);
+	for (k in defaults.allKeys)
+		if (!exists(k)) defineConstant(k, defaults.getValue(k));
+	if (!exists("OUT")) defineConstant("OUT", "clonal_run");
+	setSeed(SEED);
+
+	initializeSLiMModelType("nonWF");
+	initializeSLiMOptions(keepPedigrees=T);
+	initializeTreeSeq();
+	initializeMutationRate(0.0);
+	initializeMutationType("m1", 0.5, "f", 0.0);
+	initializeGenomicElementType("g1", m1, 1.0);
+	defineConstant("L", NCHR * CHRLEN);
+	initializeGenomicElement(g1, 0, L - 1);
+
+	ends = NULL; rates = NULL;
+	for (c in 1:NCHR) {
+		ends = c(ends, c * CHRLEN - 1);
+		rates = c(rates, R);
+		if (c < NCHR) { ends = c(ends, c * CHRLEN); rates = c(rates, 0.5); }
+	}
+	initializeRecombinationRate(rates, ends);
+}
+
+1 early() {
+	for (k in 1:K) sim.addSubpop(k, N);
+	inds = sim.subpopulations.individuals;
+	inds.tag = asInteger(seqLen(size(inds)));
+	defineGlobal("NEXT_ID", size(inds));
+	community.rescheduleScriptBlock(s1, GENS, GENS);
+}
+
+reproduction() {
+	self.active = 0;
+	pops = sim.subpopulations;
+	for (target in pops) {
+		others = pops[pops != target];
+		for (i in seqLen(N)) {
+			src = (runif(1) < M) ? sample(others, 1) else target;
+			if (runif(1) < C) {
+				parent = sample(src.individuals, 1);
+				if (runif(1) < P_LOH) {
+					// gene-conversion tract, kept within one chromosome
+					s = rdunif(1, 0, L - 1);
+					chrEnd = (asInteger(s / CHRLEN) + 1) * CHRLEN;
+					e = min(chrEnd, s + 1 + asInteger(rexp(1, LOH_LEN)));
+					// recipient strand takes the donor's tract; the donor is copied
+					// intact. (randomizeStrands=T would swap only the first pair and
+					// make the child homozygous genome-wide.)
+					h = sample(parent.haplosomes, 2);
+					child = target.addRecombinant(h[0], h[1], (e < L) ? c(s, e) else s, h[1], NULL, NULL,
+						parent1=parent, parent2=parent, randomizeStrands=F);
+				} else {
+					child = target.addCloned(parent);
+				}
+				child.tag = parent.tag;
+			} else {
+				parents = sample(src.individuals, 2, replace=T);
+				child = target.addCrossed(parents[0], parents[1]);
+				child.tag = NEXT_ID;
+				defineGlobal("NEXT_ID", NEXT_ID + 1);
+			}
+		}
+	}
+}
+
+early() {
+	inds = sim.subpopulations.individuals;
+	inds[inds.age > 0].fitnessScaling = 0.0;
+}
+
+s1 1000000 late() {
+	{
+		samples = NULL;
+		for (pop in sim.subpopulations)
+			samples = c(samples, sample(pop.individuals, NSAMP));
+		lines = "pedigree_id,deme,clone_id";
+		for (ind in samples)
+			lines = c(lines, ind.pedigreeID + "," + ind.subpopulation.id + "," + ind.tag);
+		writeFile(OUT + ".samples.csv", lines);
+		sim.treeSeqRememberIndividuals(samples);
+		sim.treeSeqOutput(OUT + ".trees");
+		catn("done tick " + community.tick + "; distinct clones in sample: " + size(unique(samples.tag)));
+		sim.simulationFinished();
+	}
+}

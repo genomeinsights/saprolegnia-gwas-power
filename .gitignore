@@ -1,0 +1,6 @@
+out/tmp/
+out/logs/
+out/t_*
+out/grid_run.log
+.DS_Store
+.Rhistory
