@@ -10,8 +10,6 @@ out/*/tmp/
 out/*/logs/
 out/heat/
 out/loh/t99*
-out/res_d2/
-out/res_d4/
 docs/*.aux
 docs/*.log
 docs/*.out
