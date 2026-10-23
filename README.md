@@ -84,6 +84,21 @@ slightly lower at intermediate numbers of clones, but far fewer of its loci are 
 SNP level does not control the proportion of false *loci*, whereas testing LD units does.
 (`R/analyse_rep.R` also computes a Simes-combined unit test, which is not reported.)
 
+## Exploratory analyses (October 2026)
+
+These extend the power analysis; all use the same SLiM model and are preliminary.
+
+| Analysis | Scripts | Output |
+|---|---|---|
+| LD complexity reduction on clonal data: genotype heatmaps of one region by position, clustered on 1 - r2, and stage-1 representative SNPs only | `R/heatmap_ldcr.R` | `figures/heatmap_*.png` |
+| Detection of mitotic LOH tracts from ~2x data within clone families, scored against true tracts from the tree sequence (`py/ts_to_geno.py --loh`) | `run_loh.sh`, `R/loh_poc.R`, `R/loh_plot.R` | `out/loh/res/`, `out/loh/summary_loh.csv`, `figures/loh_poc.*` |
+| LD summaries vs rate of sex and population size (cloning rate 0.9-0.999 x N 500/1000/2000 x 3 replicates) | `run_sexrate.sh`, `R/sexrate_rep.R`, `R/sexrate_plot.R`, `R/sexrate_loo.R` | `out/sexrate/`, `figures/sexrate_*.*`, `docs/rate_of_sex_note.pdf` |
+| Association scans with clone representatives at 2x/4x instead of 15x (in progress) | `run_depth.sh`, `R/depth_plot.R` | `out/res_d2/`, `out/res_d4/` (not yet committed) |
+
+The SLiM model now also records each clonal lineage's founding tick (`clone_tick` in the
+samples file), which defines the true LOH tracts; this does not change the simulated
+populations, so earlier results are unaffected.
+
 ## Licence
 
 MIT, see `LICENSE`.

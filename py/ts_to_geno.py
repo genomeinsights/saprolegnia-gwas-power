@@ -8,7 +8,10 @@ population of size N*K.
 Outputs (prefix = OUT):
   OUT.geno.u8   uint8 matrix, isolates x sites, row-major (0/1/2 derived dosage)
   OUT.sites.tsv chr, pos (1-based within chromosome), global position
-  OUT.inds.tsv  row order of isolates: pedigree_id, deme, clone_id
+  OUT.inds.tsv  row order of isolates: pedigree_id, deme, clone_id, clone_tick
+  OUT.loh.tsv   (with --loh) true LOH tracts: per isolate, segments where its two
+                genomes share an ancestor younger than its clonal lineage (i.e.
+                created by mitotic LOH after the lineage's sexual founding birth)
 """
 import argparse, csv, json
 import numpy as np
@@ -24,6 +27,7 @@ ap.add_argument("--nchr", type=int, default=4)
 ap.add_argument("--chrlen", type=int, default=15_750_000)
 ap.add_argument("--n", type=int, default=1000, help="SLiM deme size")
 ap.add_argument("--seed", type=int, default=1)
+ap.add_argument("--loh", action="store_true", help="also write true LOH tracts")
 a = ap.parse_args()
 
 ts = tskit.load(a.trees)
@@ -79,8 +83,31 @@ with open(a.out + ".sites.tsv", "w") as fh:
     for c, p in zip(chrom, gpos):
         fh.write(f"{c}\t{p - (c - 1) * a.chrlen + 1}\t{p}\n")
 with open(a.out + ".inds.tsv", "w") as fh:
-    fh.write("pedigree_id\tdeme\tclone_id\n")
+    fh.write("pedigree_id\tdeme\tclone_id\tclone_tick\n")
     for r in rows:
-        fh.write(f"{r['pedigree_id']}\t{r['deme']}\t{r['clone_id']}\n")
+        fh.write(f"{r['pedigree_id']}\t{r['deme']}\t{r['clone_id']}\t{r.get('clone_tick', 'NA')}\n")
+
+# --- true LOH tracts ------------------------------------------------------------------
+# Sample nodes of sts are 2i, 2i+1 for isolate i. Within-isolate IBD younger than the
+# isolate's clonal lineage can only come from mitotic LOH (sex resets the lineage).
+if a.loh:
+    with open(a.out + ".loh.tsv", "w") as fh:
+        fh.write("pedigree_id\tleft\tright\ttmrca\n")
+        for i, r in enumerate(rows):
+            age = tick - int(r["clone_tick"])
+            if age <= 0:
+                continue
+            ibd = sts.ibd_segments(between=[[2 * i], [2 * i + 1]], max_time=age,
+                                   store_segments=True)
+            segs = sorted(ibd.get((2 * i, 2 * i + 1), []), key=lambda g: g.left)
+            merged = []
+            for g in segs:          # merge abutting segments with different MRCA nodes
+                t = sts.node(g.node).time
+                if merged and merged[-1][1] == g.left:
+                    merged[-1][1] = g.right; merged[-1][2] = min(merged[-1][2], t)
+                else:
+                    merged.append([g.left, g.right, t])
+            for left, right, t in merged:
+                fh.write(f"{r['pedigree_id']}\t{int(left)}\t{int(right)}\t{t:g}\n")
 print(json.dumps({"isolates": D.shape[1], "sites": int(D.shape[0]),
                   "mean_het": float((D == 1).mean())}))

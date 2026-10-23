@@ -8,14 +8,17 @@ PY="${PY:-python3}"   # needs msprime >= 1.3 and tskit
 ID="C${C}_r${REP}"
 SEED=$(( REP * 1000 + $(printf '%.0f' "$(echo "$C * 10000" | bc)") % 1000 ))
 mkdir -p out/tmp out/res out/logs
-RES="out/res/${ID}.res.rds"
+DEPTH_HIGH="${DEPTH_HIGH:-15}"; export DEPTH_HIGH
+RESDIR=out/res; [ "$DEPTH_HIGH" != 15 ] && RESDIR="out/res_d${DEPTH_HIGH}"
+mkdir -p "$RESDIR"
+RES="${RESDIR}/${ID}.res.rds"
 [ -f "$RES" ] && exit 0
-TMP="out/tmp/${ID}"
+TMP="out/tmp/${ID}_d${DEPTH_HIGH}"
 {
   slim -d C="$C" -d SEED="$SEED" -d "OUT='${TMP}'" slim/clonal_metapop.slim | tail -1
   "$PY" -W ignore py/ts_to_geno.py --trees "${TMP}.trees" --samples "${TMP}.samples.csv" \
         --out "$TMP" --seed "$SEED"
   Rscript R/analyse_rep.R "$TMP" "$SEED" "$RES"
-} > "out/logs/${ID}.log" 2>&1 || { echo "FAILED $ID"; rm -f "${TMP}".*; exit 1; }
+} > "out/logs/${ID}_d${DEPTH_HIGH}.log" 2>&1 || { echo "FAILED $ID"; rm -f "${TMP}".*; exit 1; }
 rm -f "${TMP}".*
 echo "ok $ID"

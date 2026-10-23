@@ -14,8 +14,9 @@
 //     chromosome) is copied from the homologue, making it homozygous.
 //   * No mutations are simulated forward: the tree sequence is recorded,
 //     recapitated and mutated afterwards (py/ts_to_geno.py).
-//   * Individual tag = clonal lineage ID: new at each sexual birth, inherited
-//     through clonal births. Sampled isolates are written to OUT.samples.csv.
+//   * Individual tag = clonal lineage ID and tagF = tick of the lineage's sexual
+//     founding birth; both are new at each sexual birth and inherited through
+//     clonal births. Sampled isolates are written to OUT.samples.csv.
 //
 // Usage: slim -d C=0.99 -d SEED=1 -d "OUT='out/run1'" clonal_metapop.slim
 
@@ -50,6 +51,7 @@ initialize() {
 	for (k in 1:K) sim.addSubpop(k, N);
 	inds = sim.subpopulations.individuals;
 	inds.tag = asInteger(seqLen(size(inds)));
+	inds.tagF = 0.0;
 	defineGlobal("NEXT_ID", size(inds));
 	community.rescheduleScriptBlock(s1, GENS, GENS);
 }
@@ -78,10 +80,12 @@ reproduction() {
 					child = target.addCloned(parent);
 				}
 				child.tag = parent.tag;
+				child.tagF = parent.tagF;
 			} else {
 				parents = sample(src.individuals, 2, replace=T);
 				child = target.addCrossed(parents[0], parents[1]);
 				child.tag = NEXT_ID;
+				child.tagF = asFloat(community.tick);
 				defineGlobal("NEXT_ID", NEXT_ID + 1);
 			}
 		}
@@ -98,9 +102,9 @@ s1 1000000 late() {
 		samples = NULL;
 		for (pop in sim.subpopulations)
 			samples = c(samples, sample(pop.individuals, NSAMP));
-		lines = "pedigree_id,deme,clone_id";
+		lines = "pedigree_id,deme,clone_id,clone_tick";
 		for (ind in samples)
-			lines = c(lines, ind.pedigreeID + "," + ind.subpopulation.id + "," + ind.tag);
+			lines = c(lines, ind.pedigreeID + "," + ind.subpopulation.id + "," + ind.tag + "," + asInteger(ind.tagF));
 		writeFile(OUT + ".samples.csv", lines);
 		sim.treeSeqRememberIndividuals(samples);
 		sim.treeSeqOutput(OUT + ".trees");

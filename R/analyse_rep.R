@@ -17,7 +17,10 @@
 ##  2. Clones = average-linkage clusters below CLONE_CUT of the median
 ##     unrelated distance. One random isolate per inferred clone.
 ##  3. Deep sequencing of the representatives (depth ~ Pois(DEPTH_HIGH)):
-##     genotype likelihoods -> called genotypes used for all scans.
+##     genotype likelihoods -> called genotypes used for all scans. With
+##     DEPTH_HIGH < 8 (shallow test): posterior mean dosages under HWE (allele
+##     frequencies by EM) for EMMAX and consensus units; rounded dosages for the
+##     GDS (LD decay, stage-1 clustering, GRM).
 ##  4. Phenotypes (one value per clone): for each PVE in PVE_MAJOR and each
 ##     chromosome, one major QTL + polygenic background + deme effect + noise.
 ##  5. Scans, reusing the LDscnR simulation pipeline settings
@@ -109,16 +112,32 @@ ll <- sapply(0:2, function(g) {
   dbinom(rh$k, rh$d, p, log = TRUE)
 })
 dim(ll) <- c(nr, S, 3)
-Gc <- matrix(max.col(matrix(ll, ncol = 3), ties.method = "random") - 1L, nr, S)
-Gc[rh$d == 0] <- NA
+if (DEPTH_HIGH >= 8) {
+  ## deep: maximum-likelihood genotype calls
+  Gc <- matrix(max.col(matrix(ll, ncol = 3), ties.method = "random") - 1L, nr, S)
+  Gc[rh$d == 0] <- NA
+  af <- colMeans(Gc, na.rm = TRUE) / 2
+  Gd <- Gc
+} else {
+  ## shallow: posterior mean dosages under HWE, allele frequencies by EM
+  L0 <- exp(ll[, , 1]); L1 <- exp(ll[, , 2]); L2 <- exp(ll[, , 3])
+  af <- pmin(pmax(colSums(rh$k) / pmax(colSums(rh$d), 1), 0.01), 0.99)
+  for (it in 1:20) {
+    w0 <- sweep(L0, 2, (1 - af)^2, "*"); w1 <- sweep(L1, 2, 2 * af * (1 - af), "*")
+    w2 <- sweep(L2, 2, af^2, "*"); tot <- w0 + w1 + w2
+    Gd <- (w1 + 2 * w2) / tot
+    af <- pmin(pmax(colMeans(Gd) / 2, 1e-4), 1 - 1e-4)
+  }
+  rm(L0, L1, L2, w0, w1, w2, tot)
+  Gc <- matrix(as.integer(round(Gd)), nr, S)    # integer calls, for GDS (LD, clustering, GRM)
+}
 call_err <- mean(Gc != Gt, na.rm = TRUE)
-af  <- colMeans(Gc, na.rm = TRUE) / 2
 maf <- pmin(af, 1 - af)
 keep <- which(maf >= MAF_MIN & colSums(is.na(Gc)) == 0)
-Gc <- Gc[, keep]; Gt <- Gt[, keep]
+Gc <- Gc[, keep]; Gd <- Gd[, keep]; Gt <- Gt[, keep]
 map <- data.table(marker = sprintf("s%d", keep), Chr = paste0("Chr", sites$chr[keep]),
                   Pos = sites$pos[keep], gpos = sites$gpos[keep])
-colnames(Gc) <- map$marker
+colnames(Gc) <- colnames(Gd) <- map$marker
 cat(sprintf("[deep] %d representatives, %d SNPs (MAF >= %.2f), call error %.2e\n",
             nr, nrow(map), MAF_MIN, call_err))
 
@@ -131,8 +150,8 @@ stage1 <- suppressMessages(ld_complexity_reduction(map = map, LD_decay = LD_deca
 grm_markers <- unique(na.omit(stage1$pruned))
 GRM <- snpgdsGRM(gds, snp.id = grm_markers, method = "GCTA", verbose = FALSE,
                  autosome.only = FALSE, missing.rate = 1)$grm
-Pm <- emmax_setup(Gc, GRM)
-um <- ld_unit_matrix(Gc, stage1, map, size_floor = 2L, repr = "consensus_dosage")
+Pm <- emmax_setup(Gd, GRM)
+um <- ld_unit_matrix(Gd, stage1, map, size_floor = 2L, repr = "consensus_dosage")
 Pu <- emmax_setup(um, GRM)
 common <- list(alpha = ALPHA, assembly = "stage2_discovered", GTs = Gc, LD_decay = LD_decay,
                score_threshold = 0.80, distance_threshold = 1e5, size_floor = 2L)
